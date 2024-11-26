@@ -44,11 +44,45 @@ public class PriceTrackerService {
         }
     }
 
+//    private double fetchCurrentPrice(String itemId) {
+//        try {
+//            // Build the URL for the eBay API request
+//            URL url = new URL(EBAY_API_ENDPOINT + itemId);
+//            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+//
+//            // Set request headers
+//            connection.setRequestMethod("GET");
+//            connection.setRequestProperty("Authorization", "Bearer " + OAUTH_TOKEN);
+//            connection.setRequestProperty("Content-Type", "application/json");
+//
+//            // Check the response code
+//            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+//                // Read the response
+//                Scanner scanner = new Scanner(connection.getInputStream());
+//                StringBuilder jsonResponse = new StringBuilder();
+//                while (scanner.hasNext()) {
+//                    jsonResponse.append(scanner.nextLine());
+//                }
+//                scanner.close();
+//
+//                // Extract price from JSON response
+//                String response = jsonResponse.toString();
+//                return parsePriceFromResponse(response);
+//            } else {
+//                System.err.println("Failed to fetch price. Response Code: " + connection.getResponseCode());
+//                return Double.MAX_VALUE; // Return a very high price to avoid false triggers
+//            }
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            return Double.MAX_VALUE;
+//        }
+//    }
     private double fetchCurrentPrice(String itemId) {
+        HttpURLConnection connection = null;
         try {
             // Build the URL for the eBay API request
             URL url = new URL(EBAY_API_ENDPOINT + itemId);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) url.openConnection();
 
             // Set request headers
             connection.setRequestMethod("GET");
@@ -56,7 +90,8 @@ public class PriceTrackerService {
             connection.setRequestProperty("Content-Type", "application/json");
 
             // Check the response code
-            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
                 // Read the response
                 Scanner scanner = new Scanner(connection.getInputStream());
                 StringBuilder jsonResponse = new StringBuilder();
@@ -69,14 +104,27 @@ public class PriceTrackerService {
                 String response = jsonResponse.toString();
                 return parsePriceFromResponse(response);
             } else {
-                System.err.println("Failed to fetch price. Response Code: " + connection.getResponseCode());
+                // Fetch and log the error message from the response body
+                Scanner scanner = new Scanner(connection.getErrorStream());
+                StringBuilder errorResponse = new StringBuilder();
+                while (scanner.hasNext()) {
+                    errorResponse.append(scanner.nextLine());
+                }
+                scanner.close();
+                System.err.println("Failed to fetch price. Response Code: " + responseCode);
+                System.err.println("Error Response: " + errorResponse.toString());
                 return Double.MAX_VALUE; // Return a very high price to avoid false triggers
             }
         } catch (IOException e) {
             e.printStackTrace();
             return Double.MAX_VALUE;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
+
 
     private double parsePriceFromResponse(String jsonResponse) {
         // Simple parsing for demonstration. Use a library like Jackson or Gson in production.
