@@ -33,7 +33,10 @@ public class PriceTrackerService {
         }
     }
 
-    public void checkPrices(List<User> users) throws IOException {
+    public void checkPrices() throws IOException {
+        DatabaseService dbService = new DatabaseService();
+        List<User> users = dbService.getUsersWithItems(); // Fetch users and items from the database
+
         for (User user : users) {
             for (Item item : user.getItems()) {
                 double currentPrice = fetchCurrentPrice(item.getId());
@@ -44,39 +47,7 @@ public class PriceTrackerService {
         }
     }
 
-//    private double fetchCurrentPrice(String itemId) {
-//        try {
-//            // Build the URL for the eBay API request
-//            URL url = new URL(EBAY_API_ENDPOINT + itemId);
-//            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-//
-//            // Set request headers
-//            connection.setRequestMethod("GET");
-//            connection.setRequestProperty("Authorization", "Bearer " + OAUTH_TOKEN);
-//            connection.setRequestProperty("Content-Type", "application/json");
-//
-//            // Check the response code
-//            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-//                // Read the response
-//                Scanner scanner = new Scanner(connection.getInputStream());
-//                StringBuilder jsonResponse = new StringBuilder();
-//                while (scanner.hasNext()) {
-//                    jsonResponse.append(scanner.nextLine());
-//                }
-//                scanner.close();
-//
-//                // Extract price from JSON response
-//                String response = jsonResponse.toString();
-//                return parsePriceFromResponse(response);
-//            } else {
-//                System.err.println("Failed to fetch price. Response Code: " + connection.getResponseCode());
-//                return Double.MAX_VALUE; // Return a very high price to avoid false triggers
-//            }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//            return Double.MAX_VALUE;
-//        }
-//    }
+
     private double fetchCurrentPrice(String itemId) {
         HttpURLConnection connection = null;
         try {
@@ -143,14 +114,12 @@ public class PriceTrackerService {
 
     private void notifyUser(String email, Item item, double currentPrice) throws IOException {
         System.out.println("Sending notification to: " + email);
-        System.out.println("Price drop detected for item: " + item.getTitle() +
-                ". Current Price: $" + currentPrice + ", Desired Price: $" + item.getDesiredPrice());
+        System.out.println("Price drop detected. Current Price: $" + currentPrice + ", Desired Price: $" + item.getDesiredPrice());
         // Use NotificationService to send the email
         NotificationService.sendEmail(
                 email,
-                "Price Drop Alert: " + item.getTitle(),
-                "The price for the item '" + item.getTitle() + "' has dropped to $" + currentPrice +
-                        ". Visit the item here: " + item.getUrl()
+                "Price Drop Alert",
+                "The price has dropped to $" + currentPrice + ". Visit the item here: " + item.getUrl()
         );
     }
 }
