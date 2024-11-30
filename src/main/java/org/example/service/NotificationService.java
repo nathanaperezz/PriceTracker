@@ -1,5 +1,8 @@
 package org.example.service;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Logger;
+
 import javax.mail.*;
 import javax.mail.internet.*;
 import java.io.FileInputStream;
@@ -9,11 +12,13 @@ import java.util.Properties;
 
 public class NotificationService {
 
+    static final Logger logger = (Logger) LogManager.getLogger("myLogger");
+
     private static String EMAIL_USERNAME;
     private static String EMAIL_APP_PASSWORD;
 
     public static void sendEmail(String to, String subject, String messageBody) throws IOException {
-        // Load configuration properties
+        // load configuration properties
         Properties properties = new Properties();
         properties.load(new FileInputStream("config.properties"));
 
@@ -41,7 +46,8 @@ public class NotificationService {
             message.setText(messageBody);
 
             Transport.send(message);
-            System.out.println("Email sent successfully to " + to);
+            logger.info("Email sent successfully to " + to);
+
         } catch (MessagingException e) {
             e.printStackTrace();
         }

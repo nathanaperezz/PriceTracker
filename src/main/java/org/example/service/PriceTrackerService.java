@@ -1,24 +1,29 @@
 package org.example.service;
 
+import com.mashape.unirest.http.HttpResponse;
+import com.mashape.unirest.http.JsonNode;
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
 import org.example.model.Item;
-import org.example.model.User;
+import org.json.JSONObject;
+import org.example.utils.ItemUtils;
 
-import java.io.FileInputStream;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.List;
 import java.util.Properties;
-import java.util.Scanner;
 
 public class PriceTrackerService {
+
+    private static final Logger logger = LogManager.getLogger(PriceTrackerService.class);
 
     private static String EBAY_API_ENDPOINT;
     private static String OAUTH_TOKEN;
 
     static {
         try {
-            // Load configuration properties
+            //load configuration properties
             Properties properties = new Properties();
             properties.load(PriceTrackerService.class.getClassLoader().getResourceAsStream("config.properties"));
 
@@ -34,88 +39,82 @@ public class PriceTrackerService {
     }
 
     public void checkPrices() throws IOException {
+        logger.info("Starting price check...");
         DatabaseService dbService = new DatabaseService();
-        List<User> users = dbService.getUsersWithItems(); // Fetch users and items from the database
+        List<Item> items = dbService.getAllItems();
 
-        for (User user : users) {
-            for (Item item : user.getItems()) {
-                double currentPrice = fetchCurrentPrice(item.getId());
-                if (currentPrice <= item.getDesiredPrice()) {
-                    notifyUser(user.getEmail(), item, currentPrice);
-                }
+        for (Item item : items) {
+            double currentPrice = fetchCurrentPrice(item.getUrl());
+            if (currentPrice <= item.getTargetPrice()) {
+                notifyUser(item.getEmail(), item, currentPrice);
             }
+            logger.debug("Successfully fetched price data.");
         }
     }
-
-
-    private double fetchCurrentPrice(String itemId) {
-        HttpURLConnection connection = null;
-        try {
-            // Build the URL for the eBay API request
-            URL url = new URL(EBAY_API_ENDPOINT + itemId);
-            connection = (HttpURLConnection) url.openConnection();
-
-            // Set request headers
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Authorization", "Bearer " + OAUTH_TOKEN);
-            connection.setRequestProperty("Content-Type", "application/json");
-
-            // Check the response code
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                // Read the response
-                Scanner scanner = new Scanner(connection.getInputStream());
-                StringBuilder jsonResponse = new StringBuilder();
-                while (scanner.hasNext()) {
-                    jsonResponse.append(scanner.nextLine());
-                }
-                scanner.close();
-
-                // Extract price from JSON response
-                String response = jsonResponse.toString();
-                return parsePriceFromResponse(response);
-            } else {
-                // Fetch and log the error message from the response body
-                Scanner scanner = new Scanner(connection.getErrorStream());
-                StringBuilder errorResponse = new StringBuilder();
-                while (scanner.hasNext()) {
-                    errorResponse.append(scanner.nextLine());
-                }
-                scanner.close();
-                System.err.println("Failed to fetch price. Response Code: " + responseCode);
-                System.err.println("Error Response: " + errorResponse.toString());
-                return Double.MAX_VALUE; // Return a very high price to avoid false triggers
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return Double.MAX_VALUE;
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-    }
-
 
     private double parsePriceFromResponse(String jsonResponse) {
-        // Simple parsing for demonstration. Use a library like Jackson or Gson in production.
         String priceMarker = "\"value\":\"";
         int startIndex = jsonResponse.indexOf(priceMarker) + priceMarker.length();
         int endIndex = jsonResponse.indexOf("\"", startIndex);
 
         if (startIndex > 0 && endIndex > startIndex) {
             String priceString = jsonResponse.substring(startIndex, endIndex);
-            return Double.parseDouble(priceString);
+            try {
+                return Double.parseDouble(priceString);
+            } catch (NumberFormatException e) {
+                System.err.println("Error parsing price value: " + priceString);
+                logger.error("Error occurred while checking prices", e);
+            }
         }
 
         System.err.println("Price not found in the response.");
-        return Double.MAX_VALUE;
+        return Double.MAX_VALUE; //returns a higher price to avoid false notifications
+    }
+
+    public double fetchCurrentPrice(String url) {
+        //extract item ID
+        String itemId = ItemUtils.extractItemIdFromUrl(url);
+
+        if (itemId == null) {
+            System.err.println("Invalid URL: Item ID not found");
+            return Double.MAX_VALUE;  // Return a default value or handle the error appropriately
+        }
+
+        logger.info("Using itemId: " + itemId);
+
+        //eBay API request with itemId
+        try {
+            HttpResponse<JsonNode> response = Unirest.get("https://api.ebay.com/buy/browse/v1/item/" + itemId)
+                    .header("Authorization", "Bearer " + OAUTH_TOKEN)
+                    .header("Accept", "application/json")
+                    .asJson();
+
+            if (response.getStatus() == 200) {
+                // Successfully fetched the item data
+                JSONObject jsonResponse = response.getBody().getObject();
+                // Extract the price (adjust based on actual eBay API response structure)
+                if (jsonResponse.has("price")) {
+                    return jsonResponse.getJSONObject("price").getDouble("value");
+                } else {
+                    System.err.println("Price not found in response.");
+                    return Double.MAX_VALUE;  // Handle error (price not found)
+                }
+            } else {
+                // Handle API error responses
+                System.err.println("Failed to fetch price. Response Code: " + response.getStatus());
+                System.err.println("Error Response: " + response.getBody().toString());
+                return Double.MAX_VALUE;  // uses higher value to avoid false notifications
+            }
+        } catch (UnirestException e) {
+            e.printStackTrace();
+            return Double.MAX_VALUE; //uses higher value to avoid false notifications
+        }
     }
 
     private void notifyUser(String email, Item item, double currentPrice) throws IOException {
         System.out.println("Sending notification to: " + email);
-        System.out.println("Price drop detected. Current Price: $" + currentPrice + ", Desired Price: $" + item.getDesiredPrice());
-        // Use NotificationService to send the email
+        System.out.println("Price drop detected. Current Price: $" + currentPrice + ", Target Price: $" + item.getTargetPrice());
+        // use NotificationService to send the email
         NotificationService.sendEmail(
                 email,
                 "Price Drop Alert",

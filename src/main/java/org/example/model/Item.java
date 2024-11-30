@@ -1,28 +1,37 @@
 package org.example.model;
 
 public class Item {
-    private String id;         // eBay Item ID
-    private String url;        // Item URL
-    private double price;      // Current price
-    private double targetPrice; // Price at which user wants notification
+    private String id;
+    private String email;
+    private String url;
+    private double originalPrice;
+    private double targetPrice;
 
-    public Item(String id, String url, double price, double targetPrice) {
+    public Item(String id, String email, String url, double originalPrice, double targetPrice) {
         this.id = id;
+        this.email = email;
         this.url = url;
-        this.price = price;
+        this.originalPrice = originalPrice;
         this.targetPrice = targetPrice;
     }
 
-    // Getters and setters
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public String getId() {
+        return id;
+    }
 
-    public String getUrl() { return url; }
-    public void setUrl(String url) { this.url = url; }
+    public String getEmail() {
+        return email;
+    }
 
-    public double getPrice() { return price; }
-    public void setPrice(double price) { this.price = price; }
+    public String getUrl() {
+        return url;
+    }
 
-    public double getDesiredPrice() { return targetPrice; }
-    public void setDesiredPrice(double targetPrice) { this.targetPrice = targetPrice; }
+    public double getOriginalPrice() {
+        return originalPrice;
+    }
+
+    public double getTargetPrice() {
+        return targetPrice;
+    }
 }
